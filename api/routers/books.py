@@ -17,22 +17,8 @@ def get_db_connection():
 # ===============================
 # Endpoints Core
 # ===============================
-@router.get("/books", tags=["Endpoints Core"])
-def list_books():
-    conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM books", conn)
-    conn.close()
-    return df.to_dict(orient="records")
 
-@router.get("/books/{book_id}", tags=["Endpoints Core"])
-def get_book_by_id(book_id: int):
-    conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM books WHERE id = ?", conn, params=(book_id,))
-    conn.close()
-    if df.empty:
-        raise HTTPException(status_code=404, detail="Livro não encontrado")
-    return df.to_dict(orient="records")[0]
-
+# 🔹 Endpoints com caminho fixo primeiro para evitar conflito
 @router.get("/books/search", tags=["Endpoints Core"])
 def search_books(
     title: Optional[str] = Query(None, description="Título do livro"),
@@ -51,6 +37,49 @@ def search_books(
         df = df[df["category"].str.contains(category, case=False, na=False)]
 
     return df.to_dict(orient="records")
+
+@router.get("/books/top-rated", tags=["Endpoints de Insights"])
+def top_rated_books(
+    limit: int = Query(..., ge=1, description="Número de livros a retornar")
+):
+    conn = get_db_connection()
+    df = pd.read_sql_query(
+        "SELECT * FROM books ORDER BY rating DESC, price DESC LIMIT ?",
+        conn,
+        params=(limit,)
+    )
+    conn.close()
+    return df.to_dict(orient="records")
+
+@router.get("/books/price-range", tags=["Endpoints de Insights"])
+def books_by_price_range(
+    min: float = Query(..., description="Preço mínimo"),
+    max: float = Query(..., description="Preço máximo")
+):
+    conn = get_db_connection()
+    df = pd.read_sql_query(
+        "SELECT * FROM books WHERE price >= ? AND price <= ?",
+        conn,
+        params=(min, max)
+    )
+    conn.close()
+    return df.to_dict(orient="records")
+
+@router.get("/books", tags=["Endpoints Core"])
+def list_books():
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM books", conn)
+    conn.close()
+    return df.to_dict(orient="records")
+
+@router.get("/books/{book_id}", tags=["Endpoints Core"])
+def get_book_by_id(book_id: int):
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM books WHERE id = ?", conn, params=(book_id,))
+    conn.close()
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    return df.to_dict(orient="records")[0]
 
 @router.get("/categories", tags=["Endpoints Core"])
 def list_categories():
@@ -79,31 +108,6 @@ def stats_by_category():
     df = pd.read_sql_query(
         "SELECT category, COUNT(*) as count, ROUND(AVG(price),2) as avg_price FROM books GROUP BY category",
         conn
-    )
-    conn.close()
-    return df.to_dict(orient="records")
-
-@router.get("/books/top-rated", tags=["Endpoints de Insights"])
-def top_rated_books(limit: int = Query(..., ge=1, description="Número de livros a retornar")):
-    conn = get_db_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM books ORDER BY rating DESC, price DESC LIMIT ?",
-        conn,
-        params=(limit,)
-    )
-    conn.close()
-    return df.to_dict(orient="records")
-
-@router.get("/books/price-range", tags=["Endpoints de Insights"])
-def books_by_price_range(
-    min: float = Query(..., description="Preço mínimo"),
-    max: float = Query(..., description="Preço máximo")
-):
-    conn = get_db_connection()
-    df = pd.read_sql_query(
-        "SELECT * FROM books WHERE price >= ? AND price <= ?",
-        conn,
-        params=(min, max)
     )
     conn.close()
     return df.to_dict(orient="records")

@@ -1,71 +1,39 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from passlib.context import CryptContext
 from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-import sqlite3
-import os
-import bcrypt
 
-router = APIRouter(tags=["JWT Authentication"])
-
-# ===============================
-# Configurações JWT
-# ===============================
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "chave-super-secreta")  # Em produção, use variável de ambiente
+# Configurações do JWT
+SECRET_KEY = "chave_secreta_super_segura"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-DB_USERS_FILE = os.path.join("data", "users.db")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
-# ===============================
-# Banco de usuários
-# ===============================
-def get_user_db_connection():
-    try:
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        conn = sqlite3.connect(DB_USERS_FILE)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-        return conn
-    except sqlite3.Error as e:
-        print(f"Erro ao conectar com o banco de usuários: {e}")
-        return None
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ===============================
-# Funções auxiliares
-# ===============================
+# Simulação de banco de usuários em memória
+fake_users_db = {}
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def authenticate_user(username: str, password: str):
-    conn = get_user_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username, password FROM users WHERE username = ?", (username,))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return None
-    stored_hash = row[1]
-    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-        return {"username": row[0]}
-    return None
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated",
+        detail="Credenciais inválidas.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -75,44 +43,34 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    return {"username": username}
+    user = fake_users_db.get(username)
+    if user is None:
+        raise credentials_exception
+    return user
 
-# ===============================
-# Endpoints de Autenticação
-# ===============================
 @router.post("/auth/register")
 def register_user(username: str, password: str):
-    conn = get_user_db_connection()
-    cursor = conn.cursor()
-    hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    try:
-        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_pw))
-        conn.commit()
-        return {"message": "Usuário registrado com sucesso."}
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="Nome de usuário já existe.")
-    finally:
-        conn.close()
+    if username in fake_users_db:
+        raise HTTPException(status_code=400, detail="Usuário já existe.")
+    hashed_password = get_password_hash(password)
+    fake_users_db[username] = {"username": username, "hashed_password": hashed_password}
+    return {"msg": "Usuário registrado com sucesso."}
 
 @router.post("/auth/login")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nome de usuário ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    user = fake_users_db.get(form_data.username)
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Usuário ou senha inválidos.")
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"]},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        data={"sub": form_data.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/auth/refresh")
-def refresh_access_token(current_user: dict = Depends(get_current_user)):
-    new_access_token = create_access_token(
-        data={"sub": current_user["username"]},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+def refresh_token(current_user: dict = Depends(get_current_user)):
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": current_user["username"]}, expires_delta=access_token_expires
     )
-    return {"access_token": new_access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer"}
