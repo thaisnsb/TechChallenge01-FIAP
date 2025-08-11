@@ -41,10 +41,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.include_router(auth_router.router, prefix="/api/v1", tags=["01 - Autenticação"])
+app.include_router(books_router.router, prefix="/api/v1")
+app.include_router(books_router.router, prefix="/api/v1")
 
-app.include_router(books_router.router, prefix="/api/v1")
-app.include_router(books_router.router, prefix="/api/v1")
-app.include_router(auth_router.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["Endpoints Core"])

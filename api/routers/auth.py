@@ -48,7 +48,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-@router.post("/auth/register")
+@router.post("/auth/register", tags=["01 - Autenticação"])
 def register_user(username: str, password: str):
     if username in fake_users_db:
         raise HTTPException(status_code=400, detail="Usuário já existe.")
@@ -56,7 +56,7 @@ def register_user(username: str, password: str):
     fake_users_db[username] = {"username": username, "hashed_password": hashed_password}
     return {"msg": "Usuário registrado com sucesso."}
 
-@router.post("/auth/login")
+@router.post("/auth/login", tags=["01 - Autenticação"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = fake_users_db.get(form_data.username)
     if not user or not verify_password(form_data.password, user["hashed_password"]):
@@ -67,7 +67,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/auth/refresh")
+@router.post("/auth/refresh", tags=["01 - Autenticação"])
 def refresh_token(current_user: dict = Depends(get_current_user)):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
