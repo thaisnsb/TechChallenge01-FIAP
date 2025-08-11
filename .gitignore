@@ -1,0 +1,20 @@
+# Ignorar a pasta do ambiente virtual
+venv/
+.venv/
+
+# Ignorar o arquivo de banco de dados
+data/*.db
+!data/.gitkeep  # Opcional: mantém a pasta 'data' no Git, mesmo que vazia
+
+# Ignorar arquivos temporários e de cache
+__pycache__/
+*.pyc
+
+# Ignorar arquivos específicos do VS Code
+.vscode/
+
+# Ignorar arquivos de log
+*.log
+
+# Ignorar o arquivo de banco de dados do sqlite que pode estar na raiz
+*.db
