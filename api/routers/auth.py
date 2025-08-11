@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -15,9 +15,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Simulação de banco de usuários em memória
+# Banco de usuários fake (apenas para testes)
 fake_users_db = {}
 
+# --------------------------
+# Funções utilitárias
+# --------------------------
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -48,15 +51,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-@router.post("/auth/register", tags=["01 - Autenticação"])
-def register_user(username: str, password: str):
+# --------------------------
+# Endpoints de Autenticação
+# --------------------------
+@router.post(
+    "/auth/register",
+    tags=["01 - Autenticação"],
+    summary="Registrar novo usuário",
+    description="Cria um novo usuário no sistema. **Necessário informar username e password**.",
+    responses={
+        200: {"description": "Usuário registrado com sucesso."},
+        400: {"description": "Usuário já existe."}
+    }
+)
+def register_user(
+    username: str = Body(..., example="meu_usuario"),
+    password: str = Body(..., example="minha_senha123")
+):
     if username in fake_users_db:
         raise HTTPException(status_code=400, detail="Usuário já existe.")
     hashed_password = get_password_hash(password)
     fake_users_db[username] = {"username": username, "hashed_password": hashed_password}
     return {"msg": "Usuário registrado com sucesso."}
 
-@router.post("/auth/login", tags=["01 - Autenticação"])
+@router.post(
+    "/auth/login",
+    tags=["01 - Autenticação"],
+    summary="Login de usuário",
+    description="Realiza login e retorna um token de acesso JWT.",
+    responses={
+        200: {"description": "Login realizado com sucesso. Retorna token JWT."},
+        400: {"description": "Usuário ou senha inválidos."}
+    }
+)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = fake_users_db.get(form_data.username)
     if not user or not verify_password(form_data.password, user["hashed_password"]):
@@ -67,7 +94,12 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/auth/refresh", tags=["01 - Autenticação"])
+@router.post(
+    "/auth/refresh",
+    tags=["01 - Autenticação"],
+    summary="Gerar novo token JWT",
+    description="Gera um novo token JWT usando o token atual válido.",
+)
 def refresh_token(current_user: dict = Depends(get_current_user)):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

@@ -1,29 +1,25 @@
 from fastapi import FastAPI
-from api.routers import auth as auth_router, books as books_router
+from fastapi.responses import RedirectResponse
+from api.routers import auth, books
 
 app = FastAPI(
-    title="TechChallenge API",
-    version="1.0.0",
-    description="API do TechChallenge para gerenciamento de livros, autenticação e estatísticas.",
-    openapi_tags=[
-        {
-            "name": "Autenticação",
-            "description": "🔑 Endpoints para cadastro e login de usuários"
-        },
-        {
-            "name": "Endpoints Core",
-            "description": "📚 Endpoints principais para consulta de livros e categorias"
-        },
-        {
-            "name": "Endpoints de Insights",
-            "description": "📊 Estatísticas e relatórios sobre os livros"
-        },
-        {
-            "name": "Scraping",
-            "description": "⚙️ Coleta e atualização de dados via scraping"
-        }
-    ]
+    title="Tech Challenge - API Livros",
+    description=(
+        "API para gerenciamento e consulta de livros.\n\n"
+        "🔹 **Passo 1**: Registre-se em `/auth/register`\n"
+        "🔹 **Passo 2**: Faça login em `/auth/login`\n"
+        "🔹 **Passo 3**: Use o token para acessar endpoints protegidos."
+    ),
+    version="1.0.0"
 )
 
-app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["Autenticação"])
-app.include_router(books_router.router, prefix="/api/v1", tags=["Endpoints Core"])
+# 🚀 Redireciona a raiz para /docs
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+# 1️⃣ Autenticação primeiro
+app.include_router(auth.router, prefix="/api/v1", tags=["01 - Autenticação"])
+
+# 2️⃣ Depois os livros
+app.include_router(books.router, prefix="/api/v1", tags=["02 - Livros"])
