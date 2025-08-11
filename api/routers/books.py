@@ -1,133 +1,124 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
-import pandas as pd
-import os
-import sqlite3
+from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional
-from api.routers.auth import get_current_user 
-
-
-from scripts.scrape_books import scrape_all_books_by_category, init_books_db, insert_books_into_db
-
+import pandas as pd
+import sqlite3
+from api.routers.auth import get_current_user
 
 router = APIRouter()
 
-# Define o caminho para o arquivo do banco de dados de livros.
-DB_BOOKS_FILE = os.path.join("data", "books.db")
-
-# Função auxiliar para estabelecer a conexão com o banco de dados.
+# ===============================
+# Função de conexão com o banco
+# ===============================
 def get_db_connection():
-    try:
-        conn = sqlite3.connect(DB_BOOKS_FILE)
-        return conn
-    except sqlite3.Error as e:
-        print(f"Erro ao conectar com o banco de dados: {e}")
-        return None
+    conn = sqlite3.connect("data/books.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Endpoint: GET /books
+# ===============================
+# Endpoints Core
+# ===============================
 @router.get("/books", tags=["Endpoints Core"])
-def list_all_books():
-    """
-    Retorna uma lista de todos os livros disponíveis no banco de dados.
-    """
+def list_books():
     conn = get_db_connection()
-    if conn is None:
-        raise HTTPException(status_code=500, detail="Erro de conexão com o banco de dados.")
+    df = pd.read_sql_query("SELECT * FROM books", conn)
+    conn.close()
+    return df.to_dict(orient="records")
 
-    try:
-        books_df = pd.read_sql_query("SELECT * FROM books", conn)
-        if books_df.empty:
-            raise HTTPException(status_code=404, detail="Nenhum livro encontrado.")
-        
-        return books_df.to_dict('records')
-    finally:
-        conn.close()
-
-# Endpoint: GET /books/{id}
-@router.get("/books/{id}", tags=["Endpoints Core"])
-def get_book_by_id(id: int):
-    """
-    Retorna os detalhes completos de um livro específico pelo seu ID.
-    A busca é feita diretamente no banco de dados, o que é mais eficiente.
-    """
+@router.get("/books/{book_id}", tags=["Endpoints Core"])
+def get_book_by_id(book_id: int):
     conn = get_db_connection()
-    if conn is None:
-        raise HTTPException(status_code=500, detail="Erro de conexão com o banco de dados.")
+    df = pd.read_sql_query("SELECT * FROM books WHERE id = ?", conn, params=(book_id,))
+    conn.close()
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    return df.to_dict(orient="records")[0]
 
-    try:
-       
-        book_df = pd.read_sql_query(f"SELECT * FROM books WHERE id = {id}", conn)
-        if book_df.empty:
-            raise HTTPException(status_code=404, detail="Livro não encontrado.")
-        
-        return book_df.iloc[0].to_dict()
-    finally:
-        conn.close()
-
-# Endpoint: GET /books/search
 @router.get("/books/search", tags=["Endpoints Core"])
-def search_books(title: Optional[str] = None, category: Optional[str] = None):
-    """
-    Busca livros por título e/ou categoria. 
-    """
-    conn = get_db_connection()
-    if conn is None:
-        raise HTTPException(status_code=500, detail="Erro de conexão com o banco de dados.")
+def search_books(
+    title: Optional[str] = Query(None, description="Título do livro"),
+    category: Optional[str] = Query(None, description="Categoria do livro")
+):
+    if title is None and category is None:
+        raise HTTPException(status_code=422, detail="Informe ao menos um parâmetro de busca (title ou category)")
 
-    query = "SELECT * FROM books WHERE 1=1"
-    params = {}
-    
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM books", conn)
+    conn.close()
+
     if title:
-        query += " AND title LIKE :title"
-        params['title'] = f"%{title}%"
-    
+        df = df[df["title"].str.contains(title, case=False, na=False)]
     if category:
-        query += " AND category LIKE :category"
-        params['category'] = f"%{category}%"
-    
-    try:
-        filtered_books_df = pd.read_sql_query(query, conn, params=params)
-        if filtered_books_df.empty:
-            raise HTTPException(status_code=404, detail="Nenhum livro encontrado.")
-            
-        return filtered_books_df.to_dict('records')
-    finally:
-        conn.close()
+        df = df[df["category"].str.contains(category, case=False, na=False)]
 
-# Endpoint: GET /categories
+    return df.to_dict(orient="records")
+
 @router.get("/categories", tags=["Endpoints Core"])
-def get_all_categories():
-    """
-    Lista todas as categorias de livros únicas disponíveis.
-    """
+def list_categories():
     conn = get_db_connection()
-    if conn is None:
-        raise HTTPException(status_code=500, detail="Erro de conexão.")
+    df = pd.read_sql_query("SELECT DISTINCT category FROM books", conn)
+    conn.close()
+    return sorted(df["category"].dropna().tolist())
 
-    try:
-        categories_df = pd.read_sql_query("SELECT DISTINCT category FROM books WHERE category IS NOT NULL", conn)
-        if categories_df.empty:
-            raise HTTPException(status_code=404, detail="Nenhuma categoria encontrada.")
-        
-        return categories_df['category'].tolist()
-    finally:
-        conn.close()
+# ===============================
+# Endpoints de Estatísticas
+# ===============================
+@router.get("/stats/overview", tags=["Endpoints de Insights"])
+def stats_overview():
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM books", conn)
+    conn.close()
+    return {
+        "total_books": len(df),
+        "avg_price": round(df["price"].mean(), 2) if not df.empty else 0,
+        "rating_distribution": df["rating"].value_counts().to_dict()
+    }
 
-# Endpoint disparar o web scraping
-@router.post("/scraping/trigger", tags=["Endpoints de Admin"])
+@router.get("/stats/categories", tags=["Endpoints de Insights"])
+def stats_by_category():
+    conn = get_db_connection()
+    df = pd.read_sql_query(
+        "SELECT category, COUNT(*) as count, ROUND(AVG(price),2) as avg_price FROM books GROUP BY category",
+        conn
+    )
+    conn.close()
+    return df.to_dict(orient="records")
+
+@router.get("/books/top-rated", tags=["Endpoints de Insights"])
+def top_rated_books(limit: int = Query(..., ge=1, description="Número de livros a retornar")):
+    conn = get_db_connection()
+    df = pd.read_sql_query(
+        "SELECT * FROM books ORDER BY rating DESC, price DESC LIMIT ?",
+        conn,
+        params=(limit,)
+    )
+    conn.close()
+    return df.to_dict(orient="records")
+
+@router.get("/books/price-range", tags=["Endpoints de Insights"])
+def books_by_price_range(
+    min: float = Query(..., description="Preço mínimo"),
+    max: float = Query(..., description="Preço máximo")
+):
+    conn = get_db_connection()
+    df = pd.read_sql_query(
+        "SELECT * FROM books WHERE price >= ? AND price <= ?",
+        conn,
+        params=(min, max)
+    )
+    conn.close()
+    return df.to_dict(orient="records")
+
+# ===============================
+# Endpoint Protegido — Trigger Scraping
+# ===============================
+@router.post("/scraping/trigger", tags=["Scraping"])
 def trigger_scraping(current_user: dict = Depends(get_current_user)):
     """
-    Endpoint para disparar o web scraping.
+    Endpoint protegido para disparar scraping manualmente.
     """
-    print(f"Scraping disparado pelo usuário: {current_user['username']}")
-
-    # Coleta os dados dos livros
-    books_to_insert = scrape_all_books_by_category()
-
-    if not books_to_insert:
-        return {"message": "Scraping concluído, mas nenhum livro novo foi encontrado."}
-
-    # Insere os dados no banco de dados
-    insert_books_into_db(books_to_insert)
-
-    return {"message": f"Scraping concluído. Foram inseridos ou atualizados {len(books_to_insert)} livros."}
-
+    try:
+        from scripts import scrape_books
+        scrape_books.run_scraping()
+        return {"message": "Scraping executado com sucesso."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

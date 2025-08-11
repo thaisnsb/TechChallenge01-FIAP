@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException
-from api.routers import books as books_router
+from api.routers import books as books_router, auth as auth_router
 import os
 import sqlite3
 import uvicorn
+
+
 
 # Define o caminho para o arquivo do banco de dados SQLite.
 DB_BOOKS_FILE = os.path.join("data", "books.db")
@@ -41,6 +43,8 @@ app = FastAPI(
 
 
 app.include_router(books_router.router, prefix="/api/v1")
+app.include_router(books_router.router, prefix="/api/v1")
+app.include_router(auth_router.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["Endpoints Core"])

@@ -159,16 +159,16 @@ def init_books_db():
     
     # Cria a tabela de livros se ela não existir
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS books (
-            id INTEGER PRIMARY KEY,
-            title TEXT,
-            category TEXT,
-            price REAL,
-            rating INTEGER,
-            is_in_stock BOOLEAN,
-            availability_text TEXT,
-            image_url TEXT,
-            book_page_url TEXT UNIQUE
+         CREATE TABLE IF NOT EXISTS books (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        category TEXT,
+        price REAL,
+        rating INTEGER,
+        is_in_stock BOOLEAN,
+        availability_text TEXT,
+        image_url TEXT,
+        book_page_url TEXT UNIQUE
         )
     ''')
     conn.commit()
