@@ -20,7 +20,6 @@ O objetivo é fornecer uma **API RESTful pública** para consulta dos dados, per
 - **DataFrame:** pandas  
 - **Validação:** Pydantic  
 - **Autenticação:** python-jose, passlib[bcrypt]  
-- **Outros:** openpyxl, lxml, bcrypt, certifi, charset-normalizer, click, ecdsa, anyio, annotated-types  
 
 ---
 

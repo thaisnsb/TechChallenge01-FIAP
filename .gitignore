@@ -13,3 +13,5 @@ __pycache__/
 # Ignorar arquivos de log
 *.log
 
+# Ignorar arquivos de gerados primeiramente em csv
+*.csv
