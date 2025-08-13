@@ -47,7 +47,7 @@ api/
 
 ```mermaid
 graph LR
-    A[Web Scraping] -->|BeautifulSoup| B[CSV + SQLite]
+    A[Web Scraping] -->|BeautifulSoup| B[SQLite]
     B --> C[API FastAPI]
     C --> D[Endpoints Públicos]
     D --> E[Clientes / Cientistas de Dados / ML Models]
