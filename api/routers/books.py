@@ -19,7 +19,7 @@ def get_db_connection():
 # ===============================
 
 # 🔹 Endpoints com caminho fixo primeiro para evitar conflito
-@router.get("/books/search", tags=["Endpoints Core"])
+@router.get("/books/search", tags=["02 - Livros"])
 def search_books(
     title: Optional[str] = Query(None, description="Título do livro"),
     category: Optional[str] = Query(None, description="Categoria do livro")
@@ -38,7 +38,7 @@ def search_books(
 
     return df.to_dict(orient="records")
 
-@router.get("/books/top-rated", tags=["Endpoints de Insights"])
+@router.get("/books/top-rated", tags=["02 - Livros"])
 def top_rated_books(
     limit: int = Query(..., ge=1, description="Número de livros a retornar")
 ):
@@ -51,7 +51,7 @@ def top_rated_books(
     conn.close()
     return df.to_dict(orient="records")
 
-@router.get("/books/price-range", tags=["Endpoints de Insights"])
+@router.get("/books/price-range",tags=["02 - Livros"])
 def books_by_price_range(
     min: float = Query(..., description="Preço mínimo"),
     max: float = Query(..., description="Preço máximo")
@@ -65,14 +65,14 @@ def books_by_price_range(
     conn.close()
     return df.to_dict(orient="records")
 
-@router.get("/books", tags=["Endpoints Core"])
+@router.get("/books", tags=["02 - Livros"])
 def list_books():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM books", conn)
     conn.close()
     return df.to_dict(orient="records")
 
-@router.get("/books/{book_id}", tags=["Endpoints Core"])
+@router.get("/books/{book_id}", tags=["02 - Livros"])
 def get_book_by_id(book_id: int):
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM books WHERE id = ?", conn, params=(book_id,))
@@ -81,7 +81,7 @@ def get_book_by_id(book_id: int):
         raise HTTPException(status_code=404, detail="Livro não encontrado")
     return df.to_dict(orient="records")[0]
 
-@router.get("/categories", tags=["Endpoints Core"])
+@router.get("/categories", tags=["02 - Livros"])
 def list_categories():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT DISTINCT category FROM books", conn)
@@ -91,7 +91,7 @@ def list_categories():
 # ===============================
 # Endpoints de Estatísticas
 # ===============================
-@router.get("/stats/overview", tags=["Endpoints de Insights"])
+@router.get("/stats/overview", tags=["02 - Livros"])
 def stats_overview():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM books", conn)
@@ -102,7 +102,7 @@ def stats_overview():
         "rating_distribution": df["rating"].value_counts().to_dict()
     }
 
-@router.get("/stats/categories", tags=["Endpoints de Insights"])
+@router.get("/stats/categories", tags=["02 - Livros"])
 def stats_by_category():
     conn = get_db_connection()
     df = pd.read_sql_query(
@@ -115,7 +115,7 @@ def stats_by_category():
 # ===============================
 # Endpoint Protegido — Trigger Scraping
 # ===============================
-@router.post("/scraping/trigger", tags=["Scraping"])
+@router.post("/scraping/trigger", tags=["02 - Livros"])
 def trigger_scraping(current_user: dict = Depends(get_current_user)):
     """
     Endpoint protegido para disparar scraping manualmente.
